@@ -60,12 +60,48 @@ class Service: NSObject {
                     completion(err)
                     return
                 }
+                
+                // Because err could be nil but HTTP Response could have Status Code 404, for instance
+                if let res = res as? HTTPURLResponse, res.statusCode != 200 {
+                    let errorString = String(data: data, encoding: .utf8) ?? ""
+                    completion(NSError(domain: "", code: res.statusCode, userInfo: [NSLocalizedDescriptionKey: errorString]))
+                    return
+                }
+                
                 completion(nil)
                 print(String(data: data, encoding: .utf8) ?? "")
             }.resume()
         } catch {
             completion(error)
         }
+    }
+    
+    func deletePost(id: Int, completion: @escaping (Error?) -> ()) {
+        guard let url = URL(string: "http://localhost:1337/post/\(id)") else { return }
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "DELETE"
+        
+        URLSession.shared.dataTask(with: urlRequest) { (data, res, err) in
+            
+            DispatchQueue.main.async {
+                if let err = err {
+                    print("There was an error when deleting post: ", err)
+                    completion(err)
+                    return
+                }
+                
+                // Because err could be nil but HTTP Response could have Status Code 404, for instance
+                if let res = res as? HTTPURLResponse, res.statusCode != 200 {
+                    let errorString = String(data: data ?? Data(), encoding: .utf8) ?? ""
+                    completion(NSError(domain: "", code: res.statusCode, userInfo: [NSLocalizedDescriptionKey: errorString]))
+                    return
+                }
+                
+                completion(nil)
+            }
+            
+        }.resume()
     }
 }
 
@@ -122,6 +158,22 @@ class ViewController: UITableViewController {
         cell.detailTextLabel?.text = post.body
         
         return cell
+    }
+    
+    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+        if editingStyle == .delete {
+            print("Trying to delete post...")
+            let post = self.posts[indexPath.row]
+            Service.shared.deletePost(id: post.id) { (err) in
+                if let err = err {
+                    print("Failed to delete: ", err)
+                    return
+                }
+                print("Successfully deleted post from server")
+                self.posts.remove(at: indexPath.row)
+                self.tableView.deleteRows(at: [indexPath], with: .automatic)
+            }
+        }
     }
 }
 
