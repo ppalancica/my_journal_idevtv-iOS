@@ -16,17 +16,27 @@ struct Post: Decodable {
 class Service: NSObject {
     static let shared = Service()
     
-    func fetchPosts(completion: () -> ()) {
+    func fetchPosts(completion: @escaping (Result<[Post], Error>) -> ()) {
         guard let url = URL(string: "http://localhost:1337/posts") else { return }
         
-        URLSession.shared.dataTask(with: url) { (data, res, err) in
-            if let err = err {
-                print("Failed to fetch posts... Error: ", err)
-                return
-            }
+        URLSession.shared.dataTask(with: url) { (data, result, err) in
             
-            guard let data = data else { return }
-            print(String(data: data, encoding: .utf8) ?? "")
+            DispatchQueue.main.async {
+                if let err = err {
+                    print("Failed to fetch posts... Error: ", err)
+                    return
+                }
+                
+                guard let data = data else { return }
+                print(String(data: data, encoding: .utf8) ?? "")
+                
+                do {
+                    let posts = try JSONDecoder().decode([Post].self, from: data)
+                    completion(.success(posts))
+                } catch {
+                    completion(.failure(error))
+                }
+            }
             
         }.resume()
     }
@@ -48,8 +58,15 @@ class ViewController: UITableViewController {
     }
 
     fileprivate func fetchPosts() {
-        Service.shared.fetchPosts {
-            
+        Service.shared.fetchPosts { (res) in
+            switch res {
+            case .failure(let err):
+                print("Failed to fetch posts: ", err)
+            case .success(let posts):
+                // print(posts)
+                self.posts = posts
+                self.tableView.reloadData()
+            }
         }
     }
     
@@ -58,12 +75,15 @@ class ViewController: UITableViewController {
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return 10
+        return posts.count
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-//        let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil) // tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
+        let post = posts[indexPath.row]
+        
+        cell.textLabel?.text = post.title
+        cell.detailTextLabel?.text = post.body
         
         return cell
     }
