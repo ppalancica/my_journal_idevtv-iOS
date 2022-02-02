@@ -40,6 +40,33 @@ class Service: NSObject {
             
         }.resume()
     }
+    
+    func createPost(title: String, body: String, completion: @escaping (Error?) -> ()) {
+        guard let url = URL(string: "http://localhost:1337/post") else { return }
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        let params = ["title": title, "postBody": body]
+        
+        do {
+            let data = try JSONSerialization.data(withJSONObject: params, options: .init())
+            urlRequest.httpBody = data
+            urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
+            
+            URLSession.shared.dataTask(with: urlRequest) { (data, res, err) in
+                guard let data = data else { return }
+                if let err = err {
+                    print("There was an error when creating post: ", err)
+                    completion(err)
+                    return
+                }
+                completion(nil)
+                print(String(data: data, encoding: .utf8) ?? "")
+            }.resume()
+        } catch {
+            completion(error)
+        }
+    }
 }
 
 class ViewController: UITableViewController {
@@ -71,7 +98,16 @@ class ViewController: UITableViewController {
     }
     
     @objc fileprivate func handleCreatePost() {
-        print("Creating post...")
+        print("Trying to create post...")
+        
+        Service.shared.createPost(title: "POST TITLE 001", body: "POST BODY 001") { (err) in
+            if let err = err {
+                print("Failed to create a Post object... Err: ", err)
+                return
+            }
+            print("Finished creating post...")
+            self.fetchPosts()
+        }
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
